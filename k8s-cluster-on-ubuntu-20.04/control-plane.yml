@@ -1,0 +1,33 @@
+---
+- hosts: control_plane
+  become: yes
+  tasks:
+    - name: initialize the cluster
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+      register: result
+      until: result.stdout.find("Your Kubernetes control-plane has initialized successfully!") != -1
+      retries: 1
+      delay: 300
+
+    - name: create .kube directory
+      become: yes
+      become_user: ganga
+      file:
+        path: $HOME/.kube
+        state: directory
+        mode: 0755
+
+    - name: copy admin.conf to user's kube config
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/ganga/.kube/config
+        remote_src: yes
+        owner: ganga
+
+    - name: install Pod network
+      become: yes
+      become_user: ganga
+      shell: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml >> pod_network_setup.txt
+      args:
+        chdir: $HOME
+        creates: pod_network_setup.txt
